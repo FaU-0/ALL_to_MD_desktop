@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
@@ -15,7 +18,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: ALL_to_MD_desktop-Windows.exe
+            artifact_name: ALL_to_MD_desktop-Windows
             binary_path: dist/ALL_to_MD_desktop.exe
           - os: ubuntu-latest
             artifact_name: ALL_to_MD_desktop-Linux
@@ -50,8 +53,16 @@ jobs:
         run: |
           pyinstaller --noconfirm --onefile --windowed --name "ALL_to_MD_desktop" --paths src --collect-all markitdown run.py
 
+      # Сохранение в артефакты Actions (доступно всегда)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
+
+      # Если был создан git-тег (например, v2.0.0) — автоматически публикует файл в GitHub Releases
+      - name: Release Asset
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ matrix.binary_path }}
