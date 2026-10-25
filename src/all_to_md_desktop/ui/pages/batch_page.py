@@ -28,10 +28,10 @@ from all_to_md_desktop.ui.widgets.drop_zone import DropZoneFrame
 
 
 class BatchModePage(QWidget):
-    """Вкладка пакетной конвертации множества файлов и папок."""
+    """Вкладка пакетной конвертации файлов и папок."""
 
     queue_count_changed = pyqtSignal(int)
-    open_in_editor_requested = pyqtSignal(str, str, str, str)  # src_full, ext, saved_path, md_text
+    open_in_editor_requested = pyqtSignal(str, str, str, str)
 
     def __init__(self, config: AppConfig, parent=None):
         super().__init__(parent)
@@ -52,9 +52,9 @@ class BatchModePage(QWidget):
         bt_layout.setSpacing(10)
 
         self.drop_zone = DropZoneFrame(
-            "Перетащите сюда файлы или целые папки для пакетной конвертации",
-            "Поддерживается добавление сотен файлов за раз с автоматической фильтрацией форматов",
-            "➕ Добавить файлы…",
+            "Перетащите сюда файлы или папки для пакетной конвертации",
+            "Автоматическая фильтрация всех поддерживаемых форматов документов и медиа",
+            "+ Добавить файлы…",
         )
         self.drop_zone.clicked.connect(self.add_files_dialog)
         self.drop_zone.paths_dropped.connect(self.add_paths)
@@ -93,11 +93,11 @@ class BatchModePage(QWidget):
         row_dest = QHBoxLayout()
         row_dest.setSpacing(8)
 
-        row_dest.addWidget(QLabel("Куда сохранять:"))
+        row_dest.addWidget(QLabel("Сохранение:"))
         self.combo_save_mode = QComboBox()
         self.combo_save_mode.addItems([
             "В выбранную папку",
-            "Рядом с исходными файлами (в те же папки)",
+            "Рядом с исходными файлами",
         ])
         self.combo_save_mode.currentIndexChanged.connect(self._on_save_mode_changed)
         row_dest.addWidget(self.combo_save_mode)
@@ -107,11 +107,11 @@ class BatchModePage(QWidget):
         self.input_out_dir.setPlaceholderText("Путь к папке сохранения…")
         row_dest.addWidget(self.input_out_dir, 1)
 
-        self.btn_browse_out_dir = QPushButton("Обзор…")
+        self.btn_browse_out_dir = QPushButton("📂 Обзор…")
         self.btn_browse_out_dir.clicked.connect(self.browse_output_dir)
         row_dest.addWidget(self.btn_browse_out_dir)
 
-        row_dest.addWidget(QLabel("Если файл существует:"))
+        row_dest.addWidget(QLabel("При совпадении имен:"))
         self.combo_collision = QComboBox()
         self.combo_collision.addItems([
             "Добавлять номер: файл (1).md",
@@ -123,15 +123,12 @@ class BatchModePage(QWidget):
 
         row_merge = QHBoxLayout()
         self.cb_merge_all = QCheckBox(
-            "Дополнительно склеить все результаты в один общий файл (_merged_bundle.md)"
-        )
-        self.cb_merge_all.setToolTip(
-            "Удобно, если нужно загрузить всю папку документов в LLM одним файлом"
+            "Дополнительно объединить все результаты в общий файл (_merged_bundle.md)"
         )
         row_merge.addWidget(self.cb_merge_all)
         row_merge.addStretch()
 
-        hint_dbl = QLabel("💡 Двойной клик по готовой строке откроет результат в Редакторе")
+        hint_dbl = QLabel("Двойной клик по готовой строке откроет файл в Превью")
         hint_dbl.setObjectName("Muted")
         row_merge.addWidget(hint_dbl)
         sc_layout.addLayout(row_merge)
@@ -140,7 +137,7 @@ class BatchModePage(QWidget):
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels([
-            "Статус", "Исходный файл", "Формат", "Размер", "Результат / Куда сохранен"
+            "Статус", "Исходный файл", "Формат", "Размер", "Результат / Путь сохранения"
         ])
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -172,14 +169,14 @@ class BatchModePage(QWidget):
         self.btn_open_folder.clicked.connect(self.open_output_folder)
         batch_bottom.addWidget(self.btn_open_folder)
 
-        self.btn_stop = QPushButton("⏹ Остановить")
+        self.btn_stop = QPushButton("Остановить")
         self.btn_stop.setObjectName("DangerBtn")
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_conversion)
         batch_bottom.addWidget(self.btn_stop)
 
-        self.btn_start = QPushButton("🚀 Запустить пакетную конвертацию")
-        self.btn_start.setObjectName("SuccessBtn")
+        self.btn_start = QPushButton("Запустить пакетную конвертацию")
+        self.btn_start.setObjectName("PrimaryBtn")
         self.btn_start.clicked.connect(self.start_conversion)
         batch_bottom.addWidget(self.btn_start)
 
@@ -247,7 +244,7 @@ class BatchModePage(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
-            status_item = QTableWidgetItem("⏳ Ожидание")
+            status_item = QTableWidgetItem("Ожидание")
             name_item = QTableWidgetItem(f_path.name)
             name_item.setToolTip(full_str)
             name_item.setData(Qt.ItemDataRole.UserRole, full_str)
@@ -309,7 +306,7 @@ class BatchModePage(QWidget):
         items = []
         for r in range(total):
             src_full = self.table.item(r, 1).data(Qt.ItemDataRole.UserRole)
-            self.table.item(r, 0).setText("⏳ Ожидание")
+            self.table.item(r, 0).setText("Ожидание")
             self.table.item(r, 4).setText("—")
             items.append((r, src_full))
 
@@ -346,14 +343,14 @@ class BatchModePage(QWidget):
             self.btn_stop.setEnabled(False)
 
     def _on_item_started(self, row: int) -> None:
-        self.table.item(row, 0).setText("⚙️ В работе…")
+        self.table.item(row, 0).setText("В работе…")
         self.table.scrollToItem(self.table.item(row, 0))
         self.lbl_status.setText(
-            f"Конвертация ({row + 1}/{self.table.rowCount()}): {self.table.item(row, 1).text()}"
+            f"Обработка ({row + 1}/{self.table.rowCount()}): {self.table.item(row, 1).text()}"
         )
 
     def _on_item_finished(self, row: int, saved_path: str, md_text: str, elapsed: float) -> None:
-        self.table.item(row, 0).setText(f"✅ {elapsed:.1f}с")
+        self.table.item(row, 0).setText(f"✓ {elapsed:.1f}с")
         out_item = self.table.item(row, 4)
         out_item.setText(saved_path)
         out_item.setToolTip(saved_path)
@@ -362,7 +359,7 @@ class BatchModePage(QWidget):
         self.progress.setValue(self.progress.value() + 1)
 
     def _on_item_error(self, row: int, error_msg: str) -> None:
-        self.table.item(row, 0).setText("❌ Ошибка")
+        self.table.item(row, 0).setText("Ошибка")
         out_item = self.table.item(row, 4)
         out_item.setText(error_msg)
         out_item.setToolTip(error_msg)
@@ -372,7 +369,7 @@ class BatchModePage(QWidget):
         self.btn_start.setEnabled(True)
         self.btn_stop.setEnabled(False)
 
-        msg = f"Готово! Успешно: {ok_count}, Ошибок: {err_count}"
+        msg = f"✓ Завершено. Успешно: {ok_count}, Ошибок: {err_count}"
         if merged_path:
             msg += f"  |  Общий файл: {Path(merged_path).name}"
         self.lbl_status.setText(msg)

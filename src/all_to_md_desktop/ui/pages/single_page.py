@@ -23,12 +23,14 @@ from PyQt6.QtWidgets import (
 )
 
 from all_to_md_desktop.config import SUPPORTED_EXTENSIONS_FILTER, AppConfig
+from all_to_md_desktop.core.tokenizer import count_tokens
 from all_to_md_desktop.core.workers import SingleConversionWorker
 from all_to_md_desktop.ui.widgets.drop_zone import DropZoneFrame
+from all_to_md_desktop.ui.widgets.source_viewer import SourceViewer
 
 
 class SingleModePage(QWidget):
-    """Вкладка конвертации одиночного файла или веб-ссылки со встроенным редактором."""
+    """Вкладка конвертации одиночного файла или веб-ссылки."""
 
     request_batch_switch = pyqtSignal(list)
 
@@ -45,6 +47,8 @@ class SingleModePage(QWidget):
         self.preview_timer.timeout.connect(self.sync_preview_and_stats)
 
         self.init_ui()
+        # По умолчанию включаем чистый и понятный режим "Превью"
+        self.set_view_mode("preview")
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -58,7 +62,7 @@ class SingleModePage(QWidget):
         top_layout.setSpacing(10)
 
         self.drop_zone = DropZoneFrame(
-            "Перетащите файл сюда (или несколько файлов для пакетного режима)",
+            "Перетащите файл сюда или нажмите для выбора в Проводнике",
             "PDF, Word, Excel, PowerPoint, HTML, CSV, JSON, ZIP, Изображения, Аудио",
             "Выбрать файл…",
         )
@@ -71,7 +75,7 @@ class SingleModePage(QWidget):
 
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText(
-            "🔗 Или вставьте ссылку (YouTube видео, статья, Wikipedia, веб-страница) и нажмите Enter…"
+            "Вставьте веб-ссылку (YouTube, Wikipedia, статья) и нажмите Enter…"
         )
         self.url_input.returnPressed.connect(self.on_url_entered)
         url_row.addWidget(self.url_input, 1)
@@ -85,7 +89,7 @@ class SingleModePage(QWidget):
         self.cb_auto_convert.toggled.connect(self._on_auto_convert_toggled)
         url_row.addWidget(self.cb_auto_convert)
 
-        self.btn_convert = QPushButton("⚡ Конвертировать")
+        self.btn_convert = QPushButton("Конвертировать")
         self.btn_convert.setObjectName("PrimaryBtn")
         self.btn_convert.clicked.connect(self.start_conversion)
         url_row.addWidget(self.btn_convert)
@@ -98,8 +102,10 @@ class SingleModePage(QWidget):
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
 
+        # Панель статуса и переключения режимов отображения
         toolbar_row = QHBoxLayout()
         toolbar_row.setContentsMargins(2, 0, 2, 0)
+        toolbar_row.setSpacing(6)
 
         self.badge_type = QLabel("ОЖИДАНИЕ")
         self.badge_type.setObjectName("Badge")
@@ -109,46 +115,79 @@ class SingleModePage(QWidget):
         self.lbl_source_info.setObjectName("Muted")
         toolbar_row.addWidget(self.lbl_source_info, 1)
 
-        self.btn_view_raw = QPushButton("📝 Код (MD)")
-        self.btn_view_raw.setObjectName("SegmentBtn")
-        self.btn_view_raw.setCheckable(True)
-
-        self.btn_view_split = QPushButton("🌓 Разделенный")
-        self.btn_view_split.setObjectName("SegmentBtn")
-        self.btn_view_split.setCheckable(True)
-        self.btn_view_split.setChecked(True)
-
-        self.btn_view_preview = QPushButton("👁️ Превью")
+        self.btn_view_preview = QPushButton("Превью")
         self.btn_view_preview.setObjectName("SegmentBtn")
+        self.btn_view_preview.setToolTip("Готовый отформатированный документ")
         self.btn_view_preview.setCheckable(True)
 
-        self.btn_view_raw.clicked.connect(lambda: self.set_view_mode("raw"))
-        self.btn_view_split.clicked.connect(lambda: self.set_view_mode("split"))
-        self.btn_view_preview.clicked.connect(lambda: self.set_view_mode("preview"))
+        self.btn_view_compare = QPushButton("Исходник | Превью")
+        self.btn_view_compare.setObjectName("SegmentBtn")
+        self.btn_view_compare.setToolTip("Слева — исходный файл, справа — результат конвертации")
+        self.btn_view_compare.setCheckable(True)
 
-        toolbar_row.addWidget(self.btn_view_raw)
-        toolbar_row.addWidget(self.btn_view_split)
+        self.btn_view_edit = QPushButton("Редактор (.md)")
+        self.btn_view_edit.setObjectName("SegmentBtn")
+        self.btn_view_edit.setToolTip(
+            "Редактирование исходной Markdown-разметки вручную перед сохранением"
+        )
+        self.btn_view_edit.setCheckable(True)
+
+        self.btn_view_preview.clicked.connect(lambda: self.set_view_mode("preview"))
+        self.btn_view_compare.clicked.connect(lambda: self.set_view_mode("compare"))
+        self.btn_view_edit.clicked.connect(lambda: self.set_view_mode("edit"))
+
         toolbar_row.addWidget(self.btn_view_preview)
+        toolbar_row.addWidget(self.btn_view_compare)
+        toolbar_row.addWidget(self.btn_view_edit)
         layout.addLayout(toolbar_row)
 
+        # Рабочая область из трех панелей, управляемых переключателем
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
+
+        # 1. Панель исходного файла
+        self.source_viewer = SourceViewer(self)
+
+        # 2. Панель редактора разметки (.md)
+        self.editor_container = QWidget()
+        ed_layout = QVBoxLayout(self.editor_container)
+        ed_layout.setContentsMargins(0, 0, 0, 0)
+        ed_layout.setSpacing(6)
+        lbl_ed_header = QLabel("РЕДАКТОР РАЗМЕТКИ MARKDOWN (.MD)")
+        lbl_ed_header.setObjectName("PaneHeader")
+        ed_layout.addWidget(lbl_ed_header)
+
         self.editor = QPlainTextEdit()
-        self.editor.setPlaceholderText("Здесь появится готовый Markdown-текст после конвертации…")
+        self.editor.setPlaceholderText(
+            "Здесь можно вручную отредактировать текст и разметку перед сохранением…"
+        )
         self.editor.textChanged.connect(lambda: self.preview_timer.start())
+        ed_layout.addWidget(self.editor, 1)
+
+        # 3. Панель готового Превью
+        self.preview_container = QWidget()
+        pr_layout = QVBoxLayout(self.preview_container)
+        pr_layout.setContentsMargins(0, 0, 0, 0)
+        pr_layout.setSpacing(6)
+        self.lbl_preview_header = QLabel("ПРЕВЬЮ РЕЗУЛЬТАТА")
+        self.lbl_preview_header.setObjectName("PaneHeader")
+        pr_layout.addWidget(self.lbl_preview_header)
 
         self.preview = QTextBrowser()
         self.preview.setOpenExternalLinks(True)
-        self.preview.setPlaceholderText("Предпросмотр отформатированного Markdown…")
+        self.preview.setPlaceholderText("Здесь появится готовый документ после конвертации…")
+        pr_layout.addWidget(self.preview, 1)
 
-        self.splitter.addWidget(self.editor)
-        self.splitter.addWidget(self.preview)
-        self.splitter.setSizes([560, 560])
+        self.splitter.addWidget(self.source_viewer)
+        self.splitter.addWidget(self.editor_container)
+        self.splitter.addWidget(self.preview_container)
+        self.splitter.setSizes([550, 550, 550])
         layout.addWidget(self.splitter, 1)
 
+        # Нижняя панель статистики и сохранения
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(10)
 
-        self.lbl_stats = QLabel("Строк: 0  |  Слов: 0  |  Символов: 0  |  ~Токенов: 0")
+        self.lbl_stats = QLabel("Строк: 0  |  Слов: 0  |  Символов: 0  |  Токенов: 0")
         self.lbl_stats.setObjectName("Muted")
         bottom_row.addWidget(self.lbl_stats, 1)
 
@@ -157,13 +196,13 @@ class SingleModePage(QWidget):
         self.btn_clear.setEnabled(False)
         bottom_row.addWidget(self.btn_clear)
 
-        self.btn_copy = QPushButton("📋 Копировать")
+        self.btn_copy = QPushButton("Копировать")
         self.btn_copy.clicked.connect(self.copy_to_clipboard)
         self.btn_copy.setEnabled(False)
         bottom_row.addWidget(self.btn_copy)
 
-        self.btn_save = QPushButton("💾 Сохранить как… (Ctrl+S)")
-        self.btn_save.setObjectName("SuccessBtn")
+        self.btn_save = QPushButton("Сохранить как… (Ctrl+S)")
+        self.btn_save.setObjectName("AccentBtn")
         self.btn_save.clicked.connect(self.save_markdown_file)
         self.btn_save.setEnabled(False)
         bottom_row.addWidget(self.btn_save)
@@ -178,13 +217,23 @@ class SingleModePage(QWidget):
         mono_font.setStyleHint(QFont.StyleHint.Monospace)
         self.editor.setFont(mono_font)
         self.preview.setFont(QFont("Segoe UI", font_size))
+        self.source_viewer.apply_font(font_size)
 
     def set_view_mode(self, mode: str) -> None:
-        self.btn_view_raw.setChecked(mode == "raw")
-        self.btn_view_split.setChecked(mode == "split")
+        """
+        Управляет режимами:
+        - 'preview' : только готовое превью
+        - 'compare' : слева исходный файл, справа превью
+        - 'edit'    : слева редактор .md текста, справа живое превью
+        """
         self.btn_view_preview.setChecked(mode == "preview")
-        self.editor.setVisible(mode in ("raw", "split"))
-        self.preview.setVisible(mode in ("preview", "split"))
+        self.btn_view_compare.setChecked(mode == "compare")
+        self.btn_view_edit.setChecked(mode == "edit")
+
+        self.source_viewer.setVisible(mode == "compare")
+        self.editor_container.setVisible(mode == "edit")
+        self.preview_container.setVisible(True)
+        self.lbl_preview_header.setVisible(mode in ("compare", "edit"))
 
     def on_paths_dropped(self, paths: list) -> None:
         if len(paths) > 1 or (len(paths) == 1 and Path(paths[0]).is_dir()):
@@ -221,6 +270,7 @@ class SingleModePage(QWidget):
 
         self.current_source = source
         self.last_extracted_title = ""
+        self.source_viewer.set_source(source)
 
         if source.startswith(("http://", "https://")):
             self.url_input.setText(source)
@@ -249,6 +299,7 @@ class SingleModePage(QWidget):
         url_candidate = self.url_input.text().strip()
         if not self.current_source and url_candidate:
             self.current_source = url_candidate
+            self.source_viewer.set_source(url_candidate)
 
         if not self.current_source:
             QMessageBox.information(
@@ -261,8 +312,8 @@ class SingleModePage(QWidget):
 
         self.progress_bar.setVisible(True)
         self.btn_convert.setEnabled(False)
-        self.btn_convert.setText("Конвертация…")
-        self.lbl_source_info.setText(f"Обработка: {self.current_source} …")
+        self.btn_convert.setText("Обработка…")
+        self.lbl_source_info.setText(f"Конвертация: {self.current_source} …")
 
         self.worker = SingleConversionWorker(self.current_source, self.config.get_engine_options())
         self.worker.finished.connect(self.on_conversion_success)
@@ -272,7 +323,7 @@ class SingleModePage(QWidget):
     def on_conversion_success(self, markdown_text: str, title: str, elapsed: float) -> None:
         self.progress_bar.setVisible(False)
         self.btn_convert.setEnabled(True)
-        self.btn_convert.setText("⚡ Конвертировать")
+        self.btn_convert.setText("Конвертировать")
 
         self.last_extracted_title = title
         self.editor.setPlainText(markdown_text)
@@ -288,7 +339,7 @@ class SingleModePage(QWidget):
     def on_conversion_error(self, error_msg: str) -> None:
         self.progress_bar.setVisible(False)
         self.btn_convert.setEnabled(True)
-        self.btn_convert.setText("⚡ Конвертировать")
+        self.btn_convert.setText("Конвертировать")
         self.lbl_source_info.setText("Ошибка при конвертации")
         QMessageBox.critical(
             self, "Ошибка конвертации", f"Не удалось конвертировать источник:\n\n{error_msg}"
@@ -297,32 +348,33 @@ class SingleModePage(QWidget):
     def load_external_result(
         self, source_path: str, file_ext: str, saved_path: str, markdown_text: str
     ) -> None:
-        """Загружает готовый результат из пакетного режима в редактор."""
         self.current_source = source_path
+        self.source_viewer.set_source(source_path)
         self.badge_type.setText(file_ext)
         self.lbl_source_info.setText(
-            f"Просмотр из пакета: {Path(source_path).name}  →  {saved_path}"
+            f"✓ Открыто из пакета: {Path(source_path).name}  →  {saved_path}"
         )
         self.editor.setPlainText(markdown_text)
         self.sync_preview_and_stats()
 
     def sync_preview_and_stats(self) -> None:
         text = self.editor.toPlainText()
-        if len(text) <= 300_000:
+        if len(text) <= 350_000:
             self.preview.setMarkdown(text)
         else:
             self.preview.setPlainText(
-                "[Документ слишком большой для живого HTML-рендера (>300 тыс. символов). "
-                "Используйте режим 'Код (MD)' и сохраните файл.]"
+                "[Документ превышает 350 тыс. символов. Для мгновенной работы используйте "
+                "режим 'Редактор (.md)' и сохраните файл на диск.]"
             )
 
         chars = len(text)
         lines = text.count("\n") + (1 if chars > 0 else 0)
         words = len(text.split()) if chars > 0 else 0
-        est_tokens = int(chars / 3.8)
+        token_count, is_exact = count_tokens(text)
+        token_label = f"Токенов (o200k): {token_count:,}" if is_exact else f"~Токенов: {token_count:,}"
 
         self.lbl_stats.setText(
-            f"Строк: {lines:,}  |  Слов: {words:,}  |  Символов: {chars:,}  |  ~Токенов: {est_tokens:,}".replace(
+            f"Строк: {lines:,}  |  Слов: {words:,}  |  Символов: {chars:,}  |  {token_label}".replace(
                 ",", " "
             )
         )
@@ -362,7 +414,7 @@ class SingleModePage(QWidget):
                     target = target.with_suffix(".md")
                 target.write_text(text, encoding="utf-8")
                 self.config.last_save_dir = str(target.parent)
-                self.lbl_source_info.setText(f"💾 Файл успешно сохранен: {target}")
+                self.lbl_source_info.setText(f"✓ Файл сохранен: {target}")
             except Exception as exc:
                 QMessageBox.critical(self, "Ошибка сохранения", f"Не удалось записать файл:\n{exc}")
 
@@ -372,17 +424,18 @@ class SingleModePage(QWidget):
             return
         QApplication.clipboard().setText(text)
         old_text = self.btn_copy.text()
-        self.btn_copy.setText("✓ Скопировано!")
+        self.btn_copy.setText("✓ Скопировано")
         QTimer.singleShot(1500, lambda: self.btn_copy.setText(old_text))
 
     def clear_workspace(self) -> None:
         self.editor.clear()
         self.preview.clear()
+        self.source_viewer.clear()
         self.current_source = ""
         self.last_extracted_title = ""
         self.url_input.clear()
         self.badge_type.setText("ОЖИДАНИЕ")
         self.lbl_source_info.setText("Файл или ссылка не выбраны")
         self.drop_zone.title_lbl.setText(
-            "Перетащите файл сюда (или несколько файлов для пакетного режима)"
+            "Перетащите файл сюда или нажмите для выбора в Проводнике"
         )

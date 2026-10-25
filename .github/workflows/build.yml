@@ -66,3 +66,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ matrix.binary_path }}
+      
+      - name: Build binary with PyInstaller
+        shell: bash
+        run: |
+          ICON_ARG=""
+          DATA_ARG=""
+          if [ -f "assets/icon.ico" ]; then
+            ICON_ARG="--icon=assets/icon.ico"
+          fi
+          if [ -d "assets" ]; then
+            DATA_ARG="--add-data assets:assets"
+          fi
+          pyinstaller --noconfirm --onefile --windowed --name "ALL_to_MD_desktop" --paths src --collect-all markitdown --collect-all tiktoken $ICON_ARG $DATA_ARG run.py

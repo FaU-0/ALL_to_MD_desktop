@@ -24,11 +24,11 @@ class AppConfig:
     """Типизированная обертка над QSettings для хранения настроек ALL_to_MD_desktop."""
 
     def __init__(self):
-        self._settings = QSettings("ALL_to_MD_desktop", "DesktopConfigV2")
+        self._settings = QSettings("ALL_to_MD_desktop", "DesktopConfigV3")
 
     @property
     def theme(self) -> str:
-        return self._settings.value("theme", "Slate Dark", type=str)
+        return self._settings.value("theme", "Carbon Dark", type=str)
 
     @theme.setter
     def theme(self, value: str) -> None:

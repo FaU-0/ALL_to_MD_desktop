@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ALL_to_MD_desktop"
-version = "0.2.0"
+version = "0.3.0"
 description = "Cross-platform desktop GUI converter to Markdown powered by Microsoft MarkItDown"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,6 +30,7 @@ dependencies = [
     "markitdown[all]>=0.1.1",
     "PyQt6>=6.6.0",
     "openai>=1.50.0",
+    "tiktoken>=0.7.0",
 ]
 
 [project.Optional-dependencies]
