@@ -47,35 +47,41 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
 
       - name: Build binary with PyInstaller
+        shell: bash
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "ALL_to_MD_desktop" --paths src --collect-all markitdown run.py
+          ICON_ARG=""
+          DATA_ARG=""
 
-      # Сохранение в артефакты Actions (доступно всегда)
+          if [ "${{ runner.os }}" = "Windows" ] && [ -f "assets/icon.ico" ]; then
+            ICON_ARG="--icon=assets/icon.ico"
+          elif [ -f "assets/icon.png" ]; then
+            ICON_ARG="--icon=assets/icon.png"
+          elif [ -f "assets/icon.ico" ]; then
+            ICON_ARG="--icon=assets/icon.ico"
+          fi
+
+          if [ -d "assets" ]; then
+            DATA_ARG="--add-data assets:assets"
+          fi
+
+          pyinstaller --noconfirm --onefile --windowed \
+            --name "ALL_to_MD_desktop" \
+            --paths src \
+            --collect-all markitdown \
+            --collect-all tiktoken \
+            $ICON_ARG $DATA_ARG run.py
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
 
-      # Если был создан git-тег (например, v2.0.0) — автоматически публикует файл в GitHub Releases
       - name: Release Asset
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: ${{ matrix.binary_path }}
-      
-      - name: Build binary with PyInstaller
-        shell: bash
-        run: |
-          ICON_ARG=""
-          DATA_ARG=""
-          if [ -f "assets/icon.ico" ]; then
-            ICON_ARG="--icon=assets/icon.ico"
-          fi
-          if [ -d "assets" ]; then
-            DATA_ARG="--add-data assets:assets"
-          fi
-          pyinstaller --noconfirm --onefile --windowed --name "ALL_to_MD_desktop" --paths src --collect-all markitdown --collect-all tiktoken $ICON_ARG $DATA_ARG run.py

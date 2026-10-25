@@ -91,7 +91,7 @@ THEMES = {
 
 
 def build_stylesheet(theme_name: str) -> str:
-    """Генерирует строгую QSS-таблицу стилей десктопного приложения."""
+    """Генерирует QSS-таблицу стилей без смещения геометрии кнопок."""
     t = THEMES.get(theme_name, THEMES["Carbon Dark"])
 
     return f"""
@@ -127,6 +127,7 @@ def build_stylesheet(theme_name: str) -> str:
         border: 1px solid {t['border']};
         border-radius: 5px;
         padding: 6px 10px;
+        min-height: 20px;
         color: {t['text_main']};
         selection-background-color: {t['accent']};
     }}
@@ -135,7 +136,7 @@ def build_stylesheet(theme_name: str) -> str:
     }}
     QComboBox::drop-down {{
         border: none;
-        width: 22px;
+        width: 24px;
     }}
     QComboBox QAbstractItemView {{
         background-color: {t['bg_card']};
@@ -150,8 +151,9 @@ def build_stylesheet(theme_name: str) -> str:
         border: 1px solid {t['border_subtle']};
         border-radius: 5px;
         padding: 6px 14px;
+        min-height: 20px;
         color: {t['text_main']};
-        font-weight: 500;
+        font-weight: 600;
     }}
     QPushButton:hover {{
         background-color: {t['bg_hover']};
@@ -169,8 +171,8 @@ def build_stylesheet(theme_name: str) -> str:
         background-color: {t['bg_card']};
         border: 1px solid {t['border']};
         border-radius: 5px;
-        padding: 5px 10px;
-        min-width: 28px;
+        padding: 6px 12px;
+        min-height: 20px;
         font-weight: 600;
         color: {t['text_main']};
     }}
@@ -219,8 +221,9 @@ def build_stylesheet(theme_name: str) -> str:
         background-color: {t['bg_input']};
         border: 1px solid {t['border']};
         border-radius: 5px;
-        padding: 5px 13px;
-        font-weight: 500;
+        padding: 6px 16px;
+        min-height: 20px;
+        font-weight: 600;
         color: {t['text_muted']};
     }}
     QPushButton#SegmentBtn:hover, QPushButton#ModeTabBtn:hover {{
@@ -229,7 +232,7 @@ def build_stylesheet(theme_name: str) -> str:
     }}
     QPushButton#SegmentBtn:checked, QPushButton#ModeTabBtn:checked {{
         background-color: {t['bg_hover']};
-        border-color: {t['border_subtle']};
+        border: 1px solid {t['text_muted']};
         color: {t['text_main']};
         font-weight: 600;
     }}
@@ -267,7 +270,8 @@ def build_stylesheet(theme_name: str) -> str:
         text-align: center;
         color: {t['text_main']};
         font-weight: 600;
-        max-height: 14px;
+        min-height: 16px;
+        max-height: 16px;
     }}
     QProgressBar::chunk {{
         background-color: {t['accent']};
@@ -278,7 +282,7 @@ def build_stylesheet(theme_name: str) -> str:
         color: {t['badge_text']};
         border: 1px solid {t['border_subtle']};
         border-radius: 4px;
-        padding: 2px 8px;
+        padding: 3px 8px;
         font-weight: 600;
         font-size: 11px;
     }}
@@ -287,7 +291,7 @@ def build_stylesheet(theme_name: str) -> str:
         color: {t['text_muted']};
         border: 1px solid {t['border']};
         border-radius: 4px;
-        padding: 4px 10px;
+        padding: 5px 10px;
         font-weight: 600;
         font-size: 11px;
     }}

@@ -1,6 +1,13 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
 
 class DropZoneFrame(QFrame):
@@ -16,11 +23,11 @@ class DropZoneFrame(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(12)
 
         icon_label = QLabel("📂")
-        icon_label.setStyleSheet("font-size: 22px; background: transparent;")
+        icon_label.setStyleSheet("font-size: 20px; background: transparent;")
         layout.addWidget(icon_label)
 
         text_layout = QVBoxLayout()
@@ -36,6 +43,7 @@ class DropZoneFrame(QFrame):
 
         self.btn_browse = QPushButton(button_text)
         self.btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_browse.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.btn_browse.clicked.connect(self.clicked.emit)
         layout.addWidget(self.btn_browse)
 

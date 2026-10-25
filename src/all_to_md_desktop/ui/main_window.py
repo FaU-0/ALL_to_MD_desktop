@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -25,20 +26,28 @@ from all_to_md_desktop.ui.pages.single_page import SingleModePage
 
 def create_app_icon() -> QIcon:
     """
-    Загружает иконку из папки assets/ (icon.ico или icon.png).
-    Если файл еще не добавлен, программно рисует строгую векторную иконку 'MD'.
+    Ищет иконку в папке assets/ (icon.ico, icon.png, icon.icns).
+    Работает как при обычном запуске, так и внутри собранного PyInstaller-файла (_MEIPASS).
     """
-    base_paths = [
-        Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[3])),
+    search_roots = []
+    if hasattr(sys, "_MEIPASS"):
+        search_roots.append(Path(sys._MEIPASS))
+    search_roots.extend([
+        Path(__file__).resolve().parents[2],  # Корень репозитория при структуре src/all_to_md_desktop
+        Path(__file__).resolve().parents[3],
         Path.cwd(),
-    ]
-    for base in base_paths:
-        for name in ("assets/icon.ico", "assets/icon.png", "icon.ico", "icon.png"):
-            candidate = base / name
-            if candidate.exists():
-                return QIcon(str(candidate))
+    ])
 
-    # Программная векторная иконка 64x64 (графитовый квадрат со знаком MD)
+    icon = QIcon()
+    for base in search_roots:
+        for rel in ("assets/icon.png", "assets/icon.ico", "assets/icon.icns", "icon.png", "icon.ico"):
+            candidate = base / rel
+            if candidate.is_file():
+                icon.addFile(str(candidate))
+        if not icon.isNull():
+            return icon
+
+    # Резервная векторная иконка, если папка assets пуста
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
@@ -71,7 +80,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{__app_name__} v{__version__}")
         self.setWindowIcon(create_app_icon())
         self.resize(1180, 800)
-        self.setMinimumSize(900, 620)
+        self.setMinimumSize(920, 620)
 
         self.init_ui()
         self.setup_shortcuts()
@@ -91,16 +100,22 @@ class MainWindow(QMainWindow):
         self.btn_mode_single.setObjectName("ModeTabBtn")
         self.btn_mode_single.setCheckable(True)
         self.btn_mode_single.setChecked(True)
+        self.btn_mode_single.setSizePolicy(
+            QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed
+        )
         self.btn_mode_single.clicked.connect(lambda: self.switch_mode(0))
 
         self.btn_mode_batch = QPushButton("Пакетная конвертация (0)")
         self.btn_mode_batch.setObjectName("ModeTabBtn")
         self.btn_mode_batch.setCheckable(True)
+        self.btn_mode_batch.setSizePolicy(
+            QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed
+        )
         self.btn_mode_batch.clicked.connect(lambda: self.switch_mode(1))
 
         header_row.addWidget(self.btn_mode_single)
         header_row.addWidget(self.btn_mode_batch)
-        header_row.addStretch()
+        header_row.addStretch(1)
 
         lbl_theme = QLabel("Тема:")
         lbl_theme.setObjectName("Muted")
@@ -109,24 +124,28 @@ class MainWindow(QMainWindow):
         self.combo_quick_theme = QComboBox()
         self.combo_quick_theme.addItems(list(THEMES.keys()))
         self.combo_quick_theme.setCurrentText(self.config.theme)
+        self.combo_quick_theme.setMinimumWidth(145)
         self.combo_quick_theme.currentTextChanged.connect(self.on_quick_theme_changed)
         header_row.addWidget(self.combo_quick_theme)
 
         btn_font_dec = QPushButton("A-")
         btn_font_dec.setObjectName("ToolbarBtn")
         btn_font_dec.setToolTip("Уменьшить шрифт (Ctrl+-)")
+        btn_font_dec.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         btn_font_dec.clicked.connect(lambda: self.adjust_font_size(-1))
         header_row.addWidget(btn_font_dec)
 
         btn_font_inc = QPushButton("A+")
         btn_font_inc.setObjectName("ToolbarBtn")
         btn_font_inc.setToolTip("Увеличить шрифт (Ctrl+=)")
+        btn_font_inc.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         btn_font_inc.clicked.connect(lambda: self.adjust_font_size(1))
         header_row.addWidget(btn_font_inc)
 
         btn_settings = QPushButton("Параметры")
         btn_settings.setObjectName("ToolbarBtn")
         btn_settings.setToolTip("Настройки движка MarkItDown, LLM Vision и оформления")
+        btn_settings.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         btn_settings.clicked.connect(self.open_settings)
         header_row.addWidget(btn_settings)
 
@@ -141,10 +160,12 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self.stack, 1)
 
         self.single_page.request_batch_switch.connect(self._on_batch_switch_requested)
-        self.batch_page.queue_count_changed.connect(
-            lambda count: self.btn_mode_batch.setText(f"Пакетная конвертация ({count})")
-        )
+        self.batch_page.queue_count_changed.connect(self._on_batch_count_updated)
         self.batch_page.open_in_editor_requested.connect(self._on_open_in_editor_from_batch)
+
+    def _on_batch_count_updated(self, count: int) -> None:
+        self.btn_mode_batch.setText(f"Пакетная конвертация ({count})")
+        self.btn_mode_batch.updateGeometry()
 
     def switch_mode(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
